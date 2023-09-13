@@ -1,27 +1,58 @@
 package com.example.myproject.services;
 
-import com.example.myproject.models.User;
+import com.example.myproject.dto.LoginReqDTO;
+import com.example.myproject.dto.LoginResDTO;
+import com.example.myproject.entity.UserEntity;
+import com.example.myproject.repository.UserRepository;
+import com.example.myproject.security.JwtHelper;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 
 @Service
+@Slf4j
 public class UserService {
 
-    private List<User> store = new ArrayList<>();
+    @Autowired
+    UserRepository userRepository;
 
-    public UserService(){
-        store.add(new User(UUID.randomUUID().toString(), "Mohit", "mohit@gmail.com"));
-        store.add(new User(UUID.randomUUID().toString(), "Ankit", "ankit@gmail.com"));
-        store.add(new User(UUID.randomUUID().toString(), "Harsh", "harsh@gmail.com"));
-        store.add(new User(UUID.randomUUID().toString(), "Gautam", "gautam@gmail.com"));
+    @Autowired
+    private JwtHelper helper;
+
+    private final PasswordEncoder passwordEncoder;
+
+    public UserService(PasswordEncoder passwordEncoder) {
+        this.passwordEncoder = passwordEncoder;
     }
 
-    public List<User> getUsers(){
-        return this.store;
+    public ResponseEntity<LoginResDTO> login(LoginReqDTO loginReqDTO){
+        try {
+            UserEntity userEntity = userRepository.findByUsername(loginReqDTO.getUsername());
+
+            if(userEntity == null || !passwordEncoder.matches(loginReqDTO.getPassword(), userEntity.getPassword())){
+                return ResponseEntity.status(HttpStatus.EXPECTATION_FAILED).body(null);
+            }
+
+            log.info("User entity : {}", userEntity);
+            String token = this.helper.generateToken(userEntity);
+            LoginResDTO loginResDTO = new LoginResDTO();
+            loginResDTO.setToken(token);
+            loginResDTO.setMessage("Token generated Successfully");
+            return ResponseEntity.ok(loginResDTO);
+        } catch (Exception e){
+            log.error("Exception occurred while login");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
     }
 
+    @ExceptionHandler(BadCredentialsException.class)
+    public String exceptionHandler() {
+        return "Credentials Invalid !!";
+    }
 
 }
